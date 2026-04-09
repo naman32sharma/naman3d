@@ -432,7 +432,7 @@ footer {
     <a href="https://www.linkedin.com/in/namansharma" target="_blank">LinkedIn</a>
     <a href="https://www.instagram.com/ig_naman_xd" target="_blank">Instagram</a>
     <a href="https://www.youtube.com/@VoxelForge-zpr" target="_blank">YouTube</a>
-    <a href="mailto:hello@namansharma.art">Email</a>
+    <a href="/cdn-cgi/l/email-protection#e9818c858586a987888488879a81889b8488c7889b9d">Email</a>
   </div>
 </section>
 
@@ -442,84 +442,92 @@ footer {
 </footer>
 
 <script>
-// ── ARTSTATION AUTO-FETCH (RSS Bypass) ──
+// ── ARTSTATION FETCH — uses cover_url (actual thumbnail you set on ArtStation) ──
 async function loadArtStation() {
-  // Aapka ArtStation RSS feed URL
-  const rssUrl = 'https://namansharma5.artstation.com/rss';
-  // rss2json API jo data format karke degi aur block nahi hogi
-  const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`;
-  
+  const username = 'namansharma5';
   const row1 = document.getElementById('row1');
   const row2 = document.getElementById('row2');
   const row3 = document.getElementById('row3');
 
   try {
-    const res = await fetch(apiUrl);
+    // projects.json returns cover_url = the exact thumbnail you set per project
+    const res = await fetch(`https://www.artstation.com/users/${username}/projects.json`);
+    if (!res.ok) throw new Error('API failed');
     const data = await res.json();
-    const projects = data.items || [];
+    const projects = (data.data || []).filter(p => p.cover_url); // only projects with a thumbnail
 
     if (projects.length === 0) { showFallback(); return; }
 
-    // Rows ko thoda shuffle karne ke liye
-    const all = [...projects];
-    const r1 = all.slice(0);
-    const r2 = [...all].reverse();
-    const r3 = [...all].sort(() => Math.random() - 0.5);
+    const r1 = [...projects];
+    const r2 = [...projects].reverse();
+    const r3 = [...projects].sort(() => Math.random() - 0.5);
 
     buildRow(row1, r1, 'strip-row-1');
     buildRow(row2, r2, 'strip-row-2');
     buildRow(row3, r3, 'strip-row-3');
 
   } catch(e) {
+    console.warn('ArtStation API blocked, falling back to RSS...', e);
+    loadViaRSS();
+  }
+}
+
+// Fallback: RSS via rss2json — uses enclosure or first img from description
+async function loadViaRSS() {
+  const rssUrl = 'https://namansharma5.artstation.com/rss';
+  const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`;
+  try {
+    const res = await fetch(apiUrl);
+    const data = await res.json();
+    const items = data.items || [];
+    if (items.length === 0) { showFallback(); return; }
+
+    // Convert RSS items to same shape as projects.json: use enclosure.link as cover_url
+    const projects = items.map(p => ({
+      cover_url: p.enclosure?.link || p.thumbnail || null,
+      permalink: p.link,
+      title: p.title
+    })).filter(p => p.cover_url);
+
+    if (projects.length === 0) { showFallback(); return; }
+
+    buildRow(document.getElementById('row1'), [...projects], 'strip-row-1');
+    buildRow(document.getElementById('row2'), [...projects].reverse(), 'strip-row-2');
+    buildRow(document.getElementById('row3'), [...projects].sort(() => Math.random()-0.5), 'strip-row-3');
+  } catch(e) {
     showFallback();
   }
 }
 
 function buildRow(container, projects, rowClass) {
+  const h = rowClass === 'strip-row-2' ? '260px' : '220px';
+
   const makeCards = () => projects.map(p => {
-    const url = p.link || `https://www.artstation.com/namansharma5`;
-    
-    // ArtStation kabhi image ko description ke andar rakhta hai
-    let thumb = p.thumbnail;
-    if (!thumb && p.description) {
-        const match = p.description.match(/<img[^>]+src="([^">]+)"/);
-        if (match) thumb = match[1];
-    }
-
-    const title = p.title || 'Untitled';
-
     const a = document.createElement('a');
-    a.href = url;
+    a.href = p.permalink || 'https://www.artstation.com/namansharma5';
     a.target = '_blank';
     a.className = 'strip-card';
 
-    if (thumb) {
-      const img = document.createElement('img');
-      img.src = thumb;
-      img.alt = title;
-      img.style.height = rowClass === 'strip-row-2' ? '260px' : '220px';
-      img.style.width = 'auto';
-      img.style.display = 'block';
-      img.style.objectFit = 'cover';
-      a.appendChild(img);
-    } else {
-      const ph = document.createElement('div');
-      ph.className = 'ph';
-      ph.style.width = '260px';
-      ph.textContent = title;
-      a.appendChild(ph);
-    }
+    // ← cover_url is the thumbnail set by you on ArtStation
+    const img = document.createElement('img');
+    img.src = p.cover_url;
+    img.alt = p.title || '';
+    img.style.cssText = `height:${h};width:auto;display:block;object-fit:cover;`;
+    // aspect ratio lock so strips don't jump on load
+    img.style.aspectRatio = '16/9';
+    a.appendChild(img);
 
     const label = document.createElement('div');
     label.className = 'hover-label';
-    label.innerHTML = `<span class="hover-label-name">${title}</span>`;
+    label.innerHTML = `<span class="hover-label-name">${p.title || 'Untitled'}</span>`;
     a.appendChild(label);
 
     return a;
   });
 
-  makeCards().forEach(card => container.appendChild(card));
-  makeCards().forEach(card => container.appendChild(card));
+  // Original + duplicate for seamless infinite scroll
+  makeCards().forEach(c => container.appendChild(c));
+  makeCards().forEach(c => container.appendChild(c));
 }
 
 function showFallback() {
@@ -544,10 +552,4 @@ loadArtStation();
 // ── SCROLL REVEAL ──
 const obs = new IntersectionObserver(entries => {
   entries.forEach((e, i) => {
-    if (e.isIntersecting) setTimeout(() => e.target.classList.add('in'), i * 60);
-  });
-}, { threshold: 0.08 });
-document.querySelectorAll('.fade').forEach(el => obs.observe(el));
-</script>
-</body>
-</html>
+    if (e.isIntersecting) setTimeout(() => e.target.c
