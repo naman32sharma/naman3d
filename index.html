@@ -442,59 +442,32 @@ footer {
 </footer>
 
 <script>
-// ── ARTSTATION FETCH — uses cover_url (actual thumbnail you set on ArtStation) ──
 async function loadArtStation() {
-  const username = 'namansharma5';
-  const row1 = document.getElementById('row1');
-  const row2 = document.getElementById('row2');
-  const row3 = document.getElementById('row3');
-
-  try {
-    // projects.json returns cover_url = the exact thumbnail you set per project
-    const res = await fetch(`https://www.artstation.com/users/${username}/projects.json`);
-    if (!res.ok) throw new Error('API failed');
-    const data = await res.json();
-    const projects = (data.data || []).filter(p => p.cover_url); // only projects with a thumbnail
-
-    if (projects.length === 0) { showFallback(); return; }
-
-    const r1 = [...projects];
-    const r2 = [...projects].reverse();
-    const r3 = [...projects].sort(() => Math.random() - 0.5);
-
-    buildRow(row1, r1, 'strip-row-1');
-    buildRow(row2, r2, 'strip-row-2');
-    buildRow(row3, r3, 'strip-row-3');
-
-  } catch(e) {
-    console.warn('ArtStation API blocked, falling back to RSS...', e);
-    loadViaRSS();
-  }
-}
-
-// Fallback: RSS via rss2json — uses enclosure or first img from description
-async function loadViaRSS() {
   const rssUrl = 'https://namansharma5.artstation.com/rss';
-  const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`;
+  const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}&api_key=&count=50`;
+
   try {
     const res = await fetch(apiUrl);
     const data = await res.json();
     const items = data.items || [];
     if (items.length === 0) { showFallback(); return; }
 
-    // Convert RSS items to same shape as projects.json: use enclosure.link as cover_url
+    // enclosure.link = actual ArtStation thumbnail you set per project
+    // thumbnail = first image inside the post (NOT what we want)
     const projects = items.map(p => ({
-      cover_url: p.enclosure?.link || p.thumbnail || null,
-      permalink: p.link,
-      title: p.title
-    })).filter(p => p.cover_url);
+      title: p.title || 'Untitled',
+      link: p.link || 'https://www.artstation.com/namansharma5',
+      cover: (p.enclosure && p.enclosure.link) ? p.enclosure.link : p.thumbnail
+    })).filter(p => p.cover);
 
     if (projects.length === 0) { showFallback(); return; }
 
     buildRow(document.getElementById('row1'), [...projects], 'strip-row-1');
     buildRow(document.getElementById('row2'), [...projects].reverse(), 'strip-row-2');
-    buildRow(document.getElementById('row3'), [...projects].sort(() => Math.random()-0.5), 'strip-row-3');
+    buildRow(document.getElementById('row3'), [...projects].sort(() => Math.random() - 0.5), 'strip-row-3');
+
   } catch(e) {
+    console.error('RSS fetch failed:', e);
     showFallback();
   }
 }
@@ -502,54 +475,63 @@ async function loadViaRSS() {
 function buildRow(container, projects, rowClass) {
   const h = rowClass === 'strip-row-2' ? '260px' : '220px';
 
-  const makeCards = () => projects.map(p => {
-    const a = document.createElement('a');
-    a.href = p.permalink || 'https://www.artstation.com/namansharma5';
-    a.target = '_blank';
-    a.className = 'strip-card';
+  function makeCards() {
+    return projects.map(p => {
+      const a = document.createElement('a');
+      a.href = p.link;
+      a.target = '_blank';
+      a.className = 'strip-card';
 
-    // ← cover_url is the thumbnail set by you on ArtStation
-    const img = document.createElement('img');
-    img.src = p.cover_url;
-    img.alt = p.title || '';
-    img.style.cssText = `height:${h};width:auto;display:block;object-fit:cover;`;
-    // aspect ratio lock so strips don't jump on load
-    img.style.aspectRatio = '16/9';
-    a.appendChild(img);
+      const img = document.createElement('img');
+      img.src = p.cover;
+      img.alt = p.title;
+      img.style.height = h;
+      img.style.width = 'auto';
+      img.style.display = 'block';
+      img.style.objectFit = 'cover';
+      img.onerror = function() { this.parentElement.style.display = 'none'; };
+      a.appendChild(img);
 
-    const label = document.createElement('div');
-    label.className = 'hover-label';
-    label.innerHTML = `<span class="hover-label-name">${p.title || 'Untitled'}</span>`;
-    a.appendChild(label);
+      const label = document.createElement('div');
+      label.className = 'hover-label';
+      label.innerHTML = `<span class="hover-label-name">${p.title}</span>`;
+      a.appendChild(label);
 
-    return a;
-  });
+      return a;
+    });
+  }
 
-  // Original + duplicate for seamless infinite scroll
+  // Original + clone for seamless infinite scroll
   makeCards().forEach(c => container.appendChild(c));
   makeCards().forEach(c => container.appendChild(c));
 }
 
 function showFallback() {
+  const names = ['Sci-Fi Samurai','KAALDRA','DOGA','Clicker Fan Art','Tactical Gloves','Metal Skin Panic','Medieval Gauntlet'];
   ['row1','row2','row3'].forEach(id => {
     const row = document.getElementById(id);
-    const names = ['Sci-Fi Samurai','KAALDRA','DOGA','Clicker','Tactical Gloves','Metal Skin Panic'];
-    for (let i = 0; i < 2; i++) {
+    [0,1].forEach(() => {
       names.forEach(n => {
         const a = document.createElement('a');
         a.href = 'https://www.artstation.com/namansharma5';
         a.target = '_blank';
         a.className = 'strip-card';
-        a.innerHTML = `<div class="ph" style="width:260px;">${n}</div><div class="hover-label"><span class="hover-label-name">${n}</span></div>`;
+        a.innerHTML = `<div class="ph" style="width:240px;">${n}<small>artstation.com/namansharma5</small></div><div class="hover-label"><span class="hover-label-name">${n}</span></div>`;
         row.appendChild(a);
       });
-    }
+    });
   });
 }
 
 loadArtStation();
 
-// ── SCROLL REVEAL ──
+// Scroll reveal
 const obs = new IntersectionObserver(entries => {
   entries.forEach((e, i) => {
-    if (e.isIntersecting) setTimeout(() => e.target.c
+    if (e.isIntersecting) setTimeout(() => e.target.classList.add('in'), i * 60);
+  });
+}, { threshold: 0.08 });
+document.querySelectorAll('.fade').forEach(el => obs.observe(el));
+</script>
+</body>
+</html>
