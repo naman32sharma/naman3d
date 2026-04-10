@@ -505,7 +505,7 @@ footer {
 // ── ARTSTATION AUTO-FETCH (Original Dimensions) ──
 async function loadArtStation() {
   const rssUrl = 'https://namansharma5.artstation.com/rss';
-  const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`;
+  const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}&count=3`;
   
   const row1 = document.getElementById('row1');
   const row2 = document.getElementById('row2');
