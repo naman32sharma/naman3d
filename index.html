@@ -143,9 +143,9 @@ nav {
   width: max-content;
 }
 .strip:last-child { margin-bottom: 0; }
-.strip-row-1 { animation: scrollLeft 38s linear infinite; }
-.strip-row-2 { animation: scrollRight 32s linear infinite; }
-.strip-row-3 { animation: scrollLeft 44s linear infinite; }
+.strip-row-1 { animation: scrollLeft 40s linear infinite; }
+.strip-row-2 { animation: scrollRight 45s linear infinite; }
+.strip-row-3 { animation: scrollLeft 50s linear infinite; }
 
 @keyframes scrollLeft  { from { transform: translateX(0); } to { transform: translateX(-50%); } }
 @keyframes scrollRight { from { transform: translateX(-50%); } to { transform: translateX(0); } }
@@ -197,7 +197,7 @@ nav {
   font-size: 1rem; color: #fff; font-weight: 400;
 }
 
-/* ── COMMON MEDIA GRID (For ArtStation & YouTube) ── */
+/* ── COMMON MEDIA GRID ── */
 .media-section {
   max-width: 1200px; margin: 0 auto;
   padding: 80px 2.5rem;
@@ -224,7 +224,6 @@ nav {
   position: relative;
   width: 100%;
   background: #000;
-  /* Original natural ratio to prevent pixelation */
   padding-bottom: 56.25%; 
 }
 .media-thumb img {
@@ -502,15 +501,30 @@ footer {
 </footer>
 
 <script>
-// ── ARTSTATION AUTO-FETCH (Original Dimensions) ──
+// ── ARTSTATION AUTO-FETCH (With Local Caching) ──
 async function loadArtStation() {
-  const rssUrl = 'https://namansharma5.artstation.com/rss';
-  const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}&count=3`;
-  
+  const cacheKey = 'artstation_cache';
+  const cacheTimeKey = 'artstation_cache_time';
+  const cacheDuration = 2 * 60 * 60 * 1000; // 2 hours
+  const now = new Date().getTime();
+
+  const cachedData = localStorage.getItem(cacheKey);
+  const cacheTime = localStorage.getItem(cacheTimeKey);
+
   const row1 = document.getElementById('row1');
   const row2 = document.getElementById('row2');
   const row3 = document.getElementById('row3');
   const asGrid = document.getElementById('as-grid');
+
+  // Check if we have valid cache
+  if (cachedData && cacheTime && (now - cacheTime < cacheDuration)) {
+    renderArtStation(JSON.parse(cachedData), row1, row2, row3, asGrid);
+    return;
+  }
+
+  // Fetch from API if no valid cache
+  const rssUrl = 'https://namansharma5.artstation.com/rss';
+  const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`;
 
   try {
     const res = await fetch(apiUrl);
@@ -519,70 +533,69 @@ async function loadArtStation() {
 
     if (projects.length === 0) { showFallback(); return; }
 
-    // --- 1. Populate Marquee Strips (ORIGINAL AUTO WIDTH) ---
-    const all = [...projects];
-    const r1 = all.slice(0);
-    const r2 = [...all].reverse();
-    const r3 = [...all].sort(() => Math.random() - 0.5);
+    // Save to Cache
+    localStorage.setItem(cacheKey, JSON.stringify(projects));
+    localStorage.setItem(cacheTimeKey, now.toString());
 
-    buildRow(row1, r1, 'strip-row-1');
-    buildRow(row2, r2, 'strip-row-2');
-    buildRow(row3, r3, 'strip-row-3');
-
-    // --- 2. Populate ArtStation Grid (Latest 3 Projects) ---
-    if (asGrid) {
-      asGrid.innerHTML = '';
-      const latestGrid = projects.slice(0, 3);
-
-      latestGrid.forEach(p => {
-        const url = p.link || `https://www.artstation.com/namansharma5`;
-        
-        let thumb = p.thumbnail;
-        if (!thumb && p.description) {
-            const match = p.description.match(/<img[^>]+src="([^">]+)"/);
-            if (match) thumb = match[1];
-        }
-
-        const title = p.title || 'Untitled';
-        
-        let dateStr = '';
-        if(p.pubDate) {
-          const dateObj = new Date(p.pubDate);
-          dateStr = dateObj.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-        }
-
-        const card = document.createElement('a');
-        card.href = url;
-        card.target = '_blank';
-        card.className = 'media-card';
-        card.innerHTML = `
-          <div class="media-thumb">
-            <img src="${thumb}" alt="${title}">
-          </div>
-          <div class="media-info">
-            <h3 class="media-title">${title}</h3>
-            <p class="media-date">${dateStr}</p>
-          </div>
-        `;
-        asGrid.appendChild(card);
-      });
-    }
-
+    renderArtStation(projects, row1, row2, row3, asGrid);
   } catch(e) {
-    showFallback();
+    if(cachedData) renderArtStation(JSON.parse(cachedData), row1, row2, row3, asGrid);
+    else showFallback();
+  }
+}
+
+function renderArtStation(projects, row1, row2, row3, asGrid) {
+  const all = [...projects];
+  const r1 = all.slice(0);
+  const r2 = [...all].reverse();
+  const r3 = [...all].sort(() => Math.random() - 0.5);
+
+  buildRow(row1, r1, 'strip-row-1');
+  buildRow(row2, r2, 'strip-row-2');
+  buildRow(row3, r3, 'strip-row-3');
+
+  if (asGrid) {
+    asGrid.innerHTML = '';
+    const latestGrid = projects.slice(0, 3);
+    latestGrid.forEach(p => {
+      const url = p.link || `https://www.artstation.com/namansharma5`;
+      let thumb = p.thumbnail;
+      if (!thumb && p.description) {
+          const match = p.description.match(/<img[^>]+src="([^">]+)"/);
+          if (match) thumb = match[1];
+      }
+      const title = p.title || 'Untitled';
+      let dateStr = '';
+      if(p.pubDate) {
+        const dateObj = new Date(p.pubDate);
+        dateStr = dateObj.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+      }
+      const card = document.createElement('a');
+      card.href = url;
+      card.target = '_blank';
+      card.className = 'media-card';
+      card.innerHTML = `
+        <div class="media-thumb">
+          <img src="${thumb}" alt="${title}">
+        </div>
+        <div class="media-info">
+          <h3 class="media-title">${title}</h3>
+          <p class="media-date">${dateStr}</p>
+        </div>
+      `;
+      asGrid.appendChild(card);
+    });
   }
 }
 
 function buildRow(container, projects, rowClass) {
   const makeCards = () => projects.map(p => {
     const url = p.link || `https://www.artstation.com/namansharma5`;
-    
     let thumb = p.thumbnail;
     if (!thumb && p.description) {
         const match = p.description.match(/<img[^>]+src="([^">]+)"/);
         if (match) thumb = match[1];
     }
-
     const title = p.title || 'Untitled';
 
     const a = document.createElement('a');
@@ -594,8 +607,6 @@ function buildRow(container, projects, rowClass) {
       const img = document.createElement('img');
       img.src = thumb;
       img.alt = title;
-      
-      // RESTORED: Original width/height rendering for perfect quality
       img.style.height = rowClass === 'strip-row-2' ? '260px' : '220px';
       img.style.width = 'auto';  
       img.style.display = 'block';
@@ -639,59 +650,81 @@ function showFallback() {
   });
 }
 
-// ── YOUTUBE AUTO-FETCH (Cache Buster Trick) ──
+// ── YOUTUBE AUTO-FETCH (With Local Caching & No Cache Buster) ──
 async function loadYouTubeVideos() {
-  const channelId = 'UCez6Rme8gZkyMQelBmyjhoQ';
-  const randomStr = new Date().getTime(); 
-  const rssUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}&_nocache=${randomStr}`;
-  const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`;
-  
+  const cacheKey = 'youtube_cache';
+  const cacheTimeKey = 'youtube_cache_time';
+  const cacheDuration = 2 * 60 * 60 * 1000; // 2 hours
+  const now = new Date().getTime();
+
+  const cachedData = localStorage.getItem(cacheKey);
+  const cacheTime = localStorage.getItem(cacheTimeKey);
   const grid = document.getElementById('yt-grid');
 
+  // Check if we have valid cache
+  if (cachedData && cacheTime && (now - cacheTime < cacheDuration)) {
+    renderYouTube(JSON.parse(cachedData), grid);
+    return;
+  }
+
+  const channelId = 'UCez6Rme8gZkyMQelBmyjhoQ';
+  // NOTICE: Removed cache-buster string so API limit is not hit on refresh
+  const rssUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`;
+  const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`;
+  
   try {
     const res = await fetch(apiUrl);
     const data = await res.json();
     const videos = data.items || [];
 
     if (videos.length === 0) {
-      grid.innerHTML = '<p style="color:var(--muted); text-align:center; width:100%;">Videos are syncing with YouTube... Please check back later.</p>';
+      if (cachedData) renderYouTube(JSON.parse(cachedData), grid);
+      else grid.innerHTML = '<p style="color:var(--muted); text-align:center; width:100%;">Videos are syncing with YouTube... Please check back later.</p>';
       return;
     }
 
-    const latestVideos = videos.slice(0, 3);
-    grid.innerHTML = ''; 
-    
-    latestVideos.forEach(v => {
-      const card = document.createElement('a');
-      card.href = v.link;
-      card.target = '_blank';
-      card.className = 'media-card';
-      
-      const dateObj = new Date(v.pubDate);
-      const dateStr = dateObj.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    // Save fresh data to Cache
+    localStorage.setItem(cacheKey, JSON.stringify(videos));
+    localStorage.setItem(cacheTimeKey, now.toString());
 
-      // Get high-res YouTube thumbnail if possible
-      let ytThumb = v.thumbnail;
-      if (ytThumb.includes('hqdefault.jpg')) {
-          ytThumb = ytThumb.replace('hqdefault.jpg', 'maxresdefault.jpg');
-      }
-
-      card.innerHTML = `
-        <div class="media-thumb">
-          <img src="${ytThumb}" alt="${v.title}">
-        </div>
-        <div class="media-info">
-          <h3 class="media-title">${v.title}</h3>
-          <p class="media-date">${dateStr}</p>
-        </div>
-      `;
-      grid.appendChild(card);
-    });
-
+    renderYouTube(videos, grid);
   } catch(e) {
     console.error('YouTube Fetch Error:', e);
-    grid.innerHTML = '<p style="color:var(--muted); text-align:center; width:100%;">Could not load videos.</p>';
+    // If fetch fails, show old cache if available
+    if (cachedData) renderYouTube(JSON.parse(cachedData), grid);
+    else grid.innerHTML = '<p style="color:var(--muted); text-align:center; width:100%;">Could not load videos.</p>';
   }
+}
+
+function renderYouTube(videos, grid) {
+  const latestVideos = videos.slice(0, 3);
+  grid.innerHTML = ''; 
+  
+  latestVideos.forEach(v => {
+    const card = document.createElement('a');
+    card.href = v.link;
+    card.target = '_blank';
+    card.className = 'media-card';
+    
+    const dateObj = new Date(v.pubDate);
+    const dateStr = dateObj.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+
+    let ytThumb = v.thumbnail;
+    if (ytThumb.includes('hqdefault.jpg')) {
+        ytThumb = ytThumb.replace('hqdefault.jpg', 'maxresdefault.jpg');
+    }
+
+    card.innerHTML = `
+      <div class="media-thumb">
+        <img src="${ytThumb}" alt="${v.title}">
+      </div>
+      <div class="media-info">
+        <h3 class="media-title">${v.title}</h3>
+        <p class="media-date">${dateStr}</p>
+      </div>
+    `;
+    grid.appendChild(card);
+  });
 }
 
 loadArtStation();
